@@ -1,0 +1,90 @@
+# =============================================================
+#        TELEGRAM BOT ver 2 BY SETUPWIZARD1
+# =============================================================
+
+# token
+
+from aiogram import Bot, Dispatcher, types, F
+from aiogram.types import Message
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.filters import Command
+import asyncio
+import logging
+
+TOKEN = ""
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+
+# Создаем бота и диспетчер
+bot = Bot(token=TOKEN)
+storage = MemoryStorage()
+dp = Dispatcher(storage=storage)
+
+
+# Определяем конечный автомат с тремя состояниями
+class Form(StatesGroup):
+    waiting_for_input = State()  # Ожидание ввода
+    processing_data = State()  # Обработка данных
+
+
+# Обработчик команды /start
+@dp.message(Command("start"))
+async def start_command(message: Message, state: FSMContext):
+    await state.set_state(Form.waiting_for_input)
+    await message.answer("Привет! Введи любое слово, и я обработаю его!")
+
+
+# Ожидание ввода от пользователя
+@dp.message(Form.waiting_for_input)
+async def get_user_input(message: Message, state: FSMContext):
+    user_text = message.text
+    await state.update_data(user_text=user_text)
+    await state.set_state(Form.processing_data)
+    await message.answer("Спасибо! Я обрабатываю твои данные...")
+
+    # Переход в следующее состояние
+    await process_data(message, state)
+
+
+# Обработка данных и возврат в начальное состояние
+async def process_data(message: Message, state: FSMContext):
+    data = await state.get_data()
+    user_text = data.get("user_text", "")
+    response = f"Ты ввел: {user_text.upper()}"
+
+    await message.answer(response)
+    await state.clear()  # Завершаем состояние
+    await message.answer("Можешь ввести новое слово или снова написать /start.")
+
+
+# Реакция на ввод непонятного сообщения
+@dp.message()
+async def unknown_message(message: Message):
+    await message.answer("Я не понимаю тебя. Напиши /start, чтобы начать.")
+
+# Реакция на картинку, стикер или голосовое сообщение
+@dp.message(Form.waiting_for_input, F.text)
+async def get_user_input(message: Message, state: FSMContext):
+    user_text = message.text
+    if not user_text:  # Проверяем, что это именно текст
+        await message.answer("Отправь мне текстовое сообщение.")
+        return
+
+    await state.update_data(user_text=user_text)
+    await state.set_state(Form.processing_data)
+    await message.answer("Спасибо! Я обрабатываю твои данные...")
+
+    await process_data(message, state)
+
+
+# Функция запуска бота
+async def main():
+    await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
